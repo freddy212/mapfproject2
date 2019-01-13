@@ -10,10 +10,18 @@ int nrOfNodes;
 vector<sf::CircleShape*> pointsInGrid;
 vector<std::array<sf::Vertex, 2>> linesInGrid;
 vector<int> *adjacentNodes;
-map<vector<int>, bool> locationStates;
+map<vector<int>, bool> visitedState;
 vector<int> goals;
 int nrOfAgents;
 int AT_GOAL = -1;
+sf::Font font;
+
+void loadFont() {
+	if (!font.loadFromFile("arial.ttf"))
+	{
+		cout << "there was an error loading the font";
+	}
+}
 void addEdge(vector<std::array<sf::Vertex, 2>> &linesInGrid, vector<sf::CircleShape*> &pointsInGrid, int x, int y) {
 	std::array<sf::Vertex, 2> line{
 		sf::Vertex(sf::Vector2f(pointsInGrid[x]->getPosition()) + sf::Vector2f(5,5)),
@@ -90,41 +98,39 @@ vector<int>& getPath(int parent[],vector<int> &result, int current) {
 	getPath(parent, result, parent[current]);
 }
 
-int BFS(int result,vector<int> starts) {
+int BFS(int result,vector<int> state) {
 	bool *visited = new bool[nrOfNodes];
 	int *parent = new int[nrOfNodes];
 	for (int i = 0; i < nrOfNodes; i++) {
 		visited[i] = false;
 	}
-	queue<pair<int,vector<int>>> queueOfNodes;
-	queueOfNodes.push(make_pair(0,starts));
+	queue<pair<int,vector<int>>> queueOfStates;
+	queueOfStates.push(make_pair(0,state));
 	//visited[start] = true;
 	//parent[start] = -1;
 
 
-	while (!(queueOfNodes.empty())) {
-		auto queuePair = queueOfNodes.front();
-		starts = queuePair.second;
-		queueOfNodes.pop();
-		locationStates[starts] = true;
-		//We have reached the end
+	while (!(queueOfStates.empty())) {
+		auto queuePair = queueOfStates.front();
+		state = queuePair.second;
+		queueOfStates.pop();
+		visitedState[state] = true;
 		vector<vector<int>> result;
 		vector<int> sofar;
-		comb(0,result, sofar, starts);
-		//cout << "this happens twice"; 
-		//cout << result.size() << " should be 1";
+		//get all possible combinations of states. save result in result
+		comb(0,result, sofar, state);
 		for (auto statevector = result.begin(); statevector != result.end();) {
 			//cout << "current state is : " << (*statevector).size() << "big and amount of states are: " << result.size();
-			if (!(collitionInStateSpace(starts, *statevector))) {
+			if (!(collitionInStateSpace(state, *statevector))) {
 				//cout << "hello, no collition"; 
 				if (checkIfAgentsAreAtGoal(*statevector, goals)) {
 					cout << "a solution is found " << "\n";
 					return queuePair.first + 1;
 				}
 				else {
-					if (locationStates.count(*statevector) != 1) {
+					if (visitedState.count(*statevector) != 1) {
 						//cout << "this is looping " << "\n";
-						queueOfNodes.push(make_pair(queuePair.first + 1, *statevector));
+						queueOfStates.push(make_pair(queuePair.first + 1, *statevector));
 					}				
 				}
 			}
@@ -172,51 +178,34 @@ int main()
 	}
 	cout << "enter the number of agents " << "\n";
 	cin >> nrOfAgents;
+	vector<sf::Text*> textvector;
+	loadFont();
 	vector<int> startAgents;
 	for (int i = 0; i < nrOfAgents; i++) {
 		cout << "enter start" << "\n";
 		cin >> start;
-		pointsInGrid[start]->setFillColor(sf::Color::Green);
+		auto startPosText = new sf::Text();
+		startPosText->setString(to_string(i + 1));
+		startPosText->setFillColor(sf::Color::Green);
+		startPosText->setPosition(pointsInGrid[start]->getPosition().x - 5, pointsInGrid[start]->getPosition().y - 15);
+		startPosText->setFont(font);
+		textvector.push_back(startPosText);
+		//pointsInGrid[start]->setFillColor(sf::Color::Green);
 		cout << "enter goal" << "\n";
 		cin >> goal;
-		pointsInGrid[goal]->setFillColor(sf::Color::Red);
+		auto endPosText = new sf::Text();
+		endPosText->setString(to_string(i + 1));
+		endPosText->setFillColor(sf::Color::Red);
+		endPosText->setPosition(pointsInGrid[goal]->getPosition().x - 5, pointsInGrid[goal]->getPosition().y - 15);
+		endPosText->setFont(font);
+		textvector.push_back(endPosText);
+		//pointsInGrid[goal]->setFillColor(sf::Color::Red);
 		startAgents.push_back(start);
 		goals.push_back(goal);
 	}
-	int resultOfMapf = BFS(0,startAgents);
-	cout << "the result is: " << resultOfMapf;
-	/*
-	if (resvec[0] != -1) {
-		for (auto res : resvec) {
-			pointsInGrid[res]->setFillColor(sf::Color::Yellow);
-		}
-		cout << "the distance from start to end is: " << resvec.size() - 1 << "\n";
-	}
-	else {
-		cout << "no path found from start to end" << "\n";
-	}*/
+	int resultOfOptimalMapf = BFS(0,startAgents);
+	cout << "the result is: " << resultOfOptimalMapf;
 
-	//pointsInGrid[start]->setFillColor(sf::Color::Green);
-	//pointsInGrid[goal]->setFillColor(sf::Color::Red);
-
-	/*for (int i = 0; i < pointsInGrid.size(); i++) {
-		if (i + 10 < pointsInGrid.size()) {
-			std::array<sf::Vertex,2> line{
-				sf::Vertex(sf::Vector2f(pointsInGrid[i]->getPosition()) + sf::Vector2f(5,5)),
-				sf::Vertex(sf::Vector2f(pointsInGrid[i + 10]->getPosition()) + sf::Vector2f(5,5))
-			};
-			linesInGrid.push_back(line);
-
-		}
-		if (i + 1 < pointsInGrid.size() && (i + 1) % 10 != 0) {
-			std::array<sf::Vertex, 2> line{
-				sf::Vertex(sf::Vector2f(pointsInGrid[i]->getPosition()) + sf::Vector2f(5,5)),
-				sf::Vertex(sf::Vector2f(pointsInGrid[i + 1]->getPosition()) + sf::Vector2f(5,5))
-			};
-			linesInGrid.push_back(line);
-		}
-	}
-	*/
 
 	while (window.isOpen())
 	{
@@ -230,6 +219,9 @@ int main()
 		window.clear();
 		for (auto p : pointsInGrid) {
 			window.draw(*p);
+		}
+		for (auto text : textvector) {
+			window.draw(*text);
 		}
 		for (auto l : linesInGrid) {
 			window.draw(l.data(), 2, sf::Lines);
