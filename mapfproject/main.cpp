@@ -4,6 +4,7 @@
 #include <array>
 #include <math.h>
 #include <queue>
+#include <set>
 using namespace std;
 
 int nrOfNodes;
@@ -11,10 +12,13 @@ vector<sf::CircleShape*> pointsInGrid;
 vector<std::array<sf::Vertex, 2>> linesInGrid;
 vector<int> *adjacentNodes;
 map<vector<int>, bool> visitedState;
-vector<int> goals;
+vector<int> goalNodes;
 int nrOfAgents;
 int AT_GOAL = -1;
 sf::Font font;
+
+set<int> startAgentPositions;
+set<pair<int, int>> agentIntervalPositions;
 
 void loadFont() {
 	if (!font.loadFromFile("arial.ttf"))
@@ -30,6 +34,81 @@ void addEdge(vector<std::array<sf::Vertex, 2>> &linesInGrid, vector<sf::CircleSh
 	linesInGrid.push_back(line);
 	adjacentNodes[x].push_back(y);
 	adjacentNodes[y].push_back(x);
+}
+
+vector<int>& getPath(int parent[], vector<int> &result, int current, int time) {
+	result.push_back(current);
+	if (parent[current] == -1) {
+		startAgentPositions.erase(current);
+		return result;
+	}
+	cout << "current is : " << current << "time is " << time << "\n";
+	agentIntervalPositions.insert(make_pair(current, time));
+	getPath(parent, result, parent[current], time - 1);
+}
+
+vector<int> BFS(int s, int g) {
+	bool *visited = new bool[nrOfNodes];
+	int *parent = new int[nrOfNodes];
+	for (int i = 0; i < nrOfNodes; i++) {
+		visited[i] = false;
+	}
+	queue<pair<int,int>> queueOfNodes;
+	queueOfNodes.push(make_pair(s, 0));
+	visited[s] = true;
+	parent[s] = -1;
+
+
+	while (!(queueOfNodes.empty())) {
+		s = queueOfNodes.front().first;
+		int time = queueOfNodes.front().second;
+		queueOfNodes.pop();
+		//We have reached the end
+		if (s == g) {
+			vector<int> resultVector;
+			return getPath(parent, resultVector, g, time);
+		}
+
+		for (auto node : adjacentNodes[s]) {
+			if (!(visited[node])) {
+				visited[node] = true;
+				//Check if the node has been traversed by another agent 
+				if (startAgentPositions.find(node) == startAgentPositions.end()) {
+					if (agentIntervalPositions.find(make_pair(node, time + 1)) == agentIntervalPositions.end()) {
+						queueOfNodes.push( make_pair(node, time + 1));
+						parent[node] = s;
+					}
+				}
+			}
+		}
+	}
+	// a path could not be found, so the first element of the new vector is -1
+	vector<int> result;
+	result.push_back(-1);
+	return result;
+}
+
+int getResultOfSupOptimalMapf(vector<int> &startpositions, vector<int> &endpositions) {
+	int result = 0;
+	for (auto pos : startpositions) {
+		startAgentPositions.insert(pos);
+	}
+	for (int i = 0; i < startpositions.size(); i++) {
+		vector<int> agentpath = BFS(startpositions[i], endpositions[i]);
+		cout << "agent path size is: " << agentpath.size() << "\n";
+
+		for (auto a : agentpath) {
+			cout << a << "\n";
+		}
+		if (agentpath[0] != -1) {
+			// the longest of these paths is the result of the algorithm
+			result = max(result, (int)agentpath.size());
+		}
+		else {
+			return -1;
+		}
+	}
+	return result - 1; 
 }
 
 void comb(int num, vector<vector<int>> &result, vector<int> sofar, vector<int> &starts) {
@@ -90,15 +169,7 @@ bool checkIfAgentsAreAtGoal(vector<int> &agentPosisitions, vector<int> &goalPosi
 	return allAgentsAtGoal;
 }
 
-vector<int>& getPath(int parent[],vector<int> &result, int current) {
-	result.push_back(current);
-	if (parent[current] == -1) {
-		return result;
-	}
-	getPath(parent, result, parent[current]);
-}
-
-int BFS(int result,vector<int> state) {
+int StateBasedBFS(int result,vector<int> state) {
 	bool *visited = new bool[nrOfNodes];
 	int *parent = new int[nrOfNodes];
 	for (int i = 0; i < nrOfNodes; i++) {
@@ -123,7 +194,7 @@ int BFS(int result,vector<int> state) {
 			//cout << "current state is : " << (*statevector).size() << "big and amount of states are: " << result.size();
 			if (!(collitionInStateSpace(state, *statevector))) {
 				//cout << "hello, no collition"; 
-				if (checkIfAgentsAreAtGoal(*statevector, goals)) {
+				if (checkIfAgentsAreAtGoal(*statevector, goalNodes)) {
 					cout << "a solution is found " << "\n";
 					return queuePair.first + 1;
 				}
@@ -138,7 +209,7 @@ int BFS(int result,vector<int> state) {
 		}
 
 	}
-	cout << "algorithm has not found solution " << "\n";
+	//cout << "algorithm has not found solution " << "\n";
 	return -1;
 }
 int main()
@@ -180,7 +251,7 @@ int main()
 	cin >> nrOfAgents;
 	vector<sf::Text*> textvector;
 	loadFont();
-	vector<int> startAgents;
+	vector<int> startNodes;
 	for (int i = 0; i < nrOfAgents; i++) {
 		cout << "enter start" << "\n";
 		cin >> start;
@@ -200,11 +271,18 @@ int main()
 		endPosText->setFont(font);
 		textvector.push_back(endPosText);
 		//pointsInGrid[goal]->setFillColor(sf::Color::Red);
-		startAgents.push_back(start);
-		goals.push_back(goal);
+		startNodes.push_back(start);
+		goalNodes.push_back(goal);
 	}
-	int resultOfOptimalMapf = BFS(0,startAgents);
-	cout << "the result is: " << resultOfOptimalMapf;
+	int resultOfMapfSolution = -1;
+	//resultOfMapfSolution = StateBasedBFS(0,startNodes);
+	resultOfMapfSolution = getResultOfSupOptimalMapf(startNodes, goalNodes);
+	if (resultOfMapfSolution == -1) {
+		cout << "the algorithm could not find a solution";
+	}
+	else {
+		cout << "the result is: " << resultOfMapfSolution;
+	}
 
 
 	while (window.isOpen())
